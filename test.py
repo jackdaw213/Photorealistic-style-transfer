@@ -20,16 +20,16 @@ parser.add_argument('-m', '--model', type=str,
 
 args = parser.parse_args()
 
-style = model.StyleTransfer()
-style.load_state_dict(torch.load("model/train.state", 
-map_location=torch.device('cpu'))["model"])
-style.eval()
+model = torch.jit.load('model/model.pt')
+model.eval()
 
 content = F.to_tensor(Image.open(args.content).convert("RGB"))
 style = F.to_tensor(Image.open(args.style).convert("RGB"))
+content = content.unsqueeze(dim=0).float()
+style = style.unsqueeze(dim=0).float()
 
 with torch.no_grad():
-    output = style(content, style)
+    output = model(content, style)
 
 output = output.squeeze()
 
