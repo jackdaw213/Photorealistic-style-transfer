@@ -1,0 +1,5 @@
+/.conda
+/__pycache__
+/test_.py
+/wandb
+/.vscode
