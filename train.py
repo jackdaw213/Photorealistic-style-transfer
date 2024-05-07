@@ -122,6 +122,6 @@ def train_model(model, optimizer, loss, train_loader, val_loader, args):
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"Saved checkpoint at epoch: {epoch + 1} ({now})")
 
-    model_scripted = torch.jit.trace(model, (torch.rand(1,3,256,256),torch.rand(1,3,256,256)))
+    model_scripted = torch.jit.trace(model.cpu(), (torch.rand(1,3,256,256),torch.rand(1,3,256,256)))
     model_scripted.save('model/model_style.pt')
     run.finish()
