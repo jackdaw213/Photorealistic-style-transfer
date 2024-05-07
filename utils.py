@@ -16,7 +16,7 @@ def image_grid(**kwargs):
         
     fig, axs = plt.subplots(num_rows, num_cols, figsize=(12, 9))
 
-    if num_rows != 1:
+    if num_rows != 1 and num_cols != 1:
         for row in range(num_rows):
             for col in range(num_cols):
                 ax = axs[row, col]
@@ -24,12 +24,24 @@ def image_grid(**kwargs):
                     ax.set_title(col_names[col])
                 ax.imshow(kwargs[col_names[col]][row])
                 ax.axis('off')
-    else:
+    elif num_rows != 1 and num_cols == 1:
+        for row in range(num_rows):
+            ax = axs[row]
+            if row == 0:
+                ax.set_title(col_names[0])
+            ax.imshow(kwargs[col_names[0]][row])
+            ax.axis('off')
+            
+    elif num_rows == 1 and num_cols != 1:
         for col in range(num_cols):
             ax = axs[col]
             ax.set_title(col_names[col])
             ax.imshow(kwargs[col_names[col]][0])
             ax.axis('off')
+    else:
+        axs.set_title(col_names[0])
+        axs.imshow(kwargs[col_names[0]][0])
+        axs.axis('off')
     
     # Adjust layout
     plt.tight_layout()
@@ -64,7 +76,7 @@ def test_style_model(model, con_images_path, sty_images_path, num_samples=8):
         with torch.no_grad():
             out = model(con, sty)
         out = out.squeeze()
-        output.append(F.to_pil_image(out))
+        output.append(out.permute(1, 2, 0))
 
     image_grid(Content=con_images, Style=sty_images, Output=output)            
 
