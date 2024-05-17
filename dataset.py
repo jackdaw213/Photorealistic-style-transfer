@@ -23,7 +23,7 @@ class StyleDataset(torch.utils.data.Dataset):
         ])
 
     def __len__(self):
-        return len(self.pair)
+        return len(self.content)
 
     def __getitem__(self, index):
         content = self.content[index]

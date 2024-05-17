@@ -100,8 +100,8 @@ if args.enable_dali:
         reader_name='Reader'
     )
 else:
-    train_dataset = dataset.StyleDataset(args.train_dir_content)
-    val_dataset = dataset.StyleDataset(args.val_dir_content)
+    train_dataset = dataset.StyleDataset(args.train_dir)
+    val_dataset = dataset.StyleDataset(args.val_dir)
 
     train_loader = DataLoader(
         train_dataset, 
