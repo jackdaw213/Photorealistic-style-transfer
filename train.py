@@ -98,7 +98,21 @@ if args.enable_dali:
         reader_name='Reader'
     )
 else:
-    pass
+    train_dataset = dataset.StyleDataset(args.train_dir_content)
+    val_dataset = dataset.StyleDataset(args.val_dir_content)
+
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=args.batch_size, 
+        shuffle=True, 
+        num_workers=args.num_workers, 
+        pin_memory=True)
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=args.batch_size, 
+        shuffle=True, 
+        num_workers=args.num_workers, 
+        pin_memory=True)
     
 model = model.StyleTransfer()
 loss = mp.StyleLoss()

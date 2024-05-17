@@ -12,14 +12,26 @@ import nvidia.dali.fn as fn
 import utils
 
 class StyleDataset(torch.utils.data.Dataset):
-    def __init__(self):
-        pass
+    def __init__(self, content_dir):
+        self.content = os.listdir(content_dir)
+        self.content_dir = content_dir
+
+        self.transform = transforms.Compose([
+            transforms.Resize((512), antialias=True),
+            transforms.RandomCrop(256),
+            transforms.ToTensor()
+        ])
 
     def __len__(self):
-        pass
+        return len(self.pair)
 
-    def __getitem__(self):
-        pass
+    def __getitem__(self, index):
+        content = self.content[index]
+        content = os.path.join(self.content_dir, content)
+        content = Image.open(content).convert("RGB")
+        content = self.transform(content)
+
+        return content
     
     @staticmethod
     @pipeline_def(device_id=0)
