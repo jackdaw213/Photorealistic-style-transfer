@@ -1,127 +1,117 @@
 import torch
-import tqdm as tq
-import torchmetrics
-from datetime import datetime
-import wandb
+import torch.nn as nn
+import argparse
+from torch.utils.data import DataLoader
+from nvidia.dali.plugin.pytorch import DALIGenericIterator
 
-import utils
+import dataset
+import model
+import train
+import model_parts as mp
 
-def train_style(model, optimizer, scaler, loss_func, loader, device, args):
+NUM_EPOCHS = 10
+BATCH_SIZE = 16
+NUM_WORKERS = 4
 
-    model.train()
+TRAIN_DIR = "data/train_content"
+VAL_DIR = "data/val_content"
 
-    content_metric = torchmetrics.MeanMetric().to(device)
-    style_metric = torchmetrics.MeanMetric().to(device)
-    total_metric = torchmetrics.MeanMetric().to(device)
+OPTIMIZER = "adam"
+LEARNING_RATE = 0.00005
+MOMENTUM = 0.6
 
-    if args.amp_dtype == "bf16":
-        dtype = torch.bfloat16
-    else:
-        dtype = torch.float16
+RESUME_ID = None
+CHECKPOINT_FREQ = 1
 
-    for _, data in enumerate(loader):
-        content = data[0]['content']
+AMP_TYPE = "bf16"
 
-        with torch.autocast(device_type="cuda", dtype=dtype, enabled=args.enable_amp):
-            content_out, content_features, content_features_loss = model(content)
-            content_loss, style_loss = loss_func(content, content_out, content_features, content_features_loss)
-            total_loss = content_loss + style_loss
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.benchmark = True
+torch.set_float32_matmul_precision("medium")
 
-        # https://discuss.pytorch.org/t/whats-the-correct-way-of-using-amp-with-multiple-losses/93328/3
-        scaler.scale(total_loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        optimizer.zero_grad()
+parser = argparse.ArgumentParser(description='Photorealistic style transfer')
 
-        content_metric(content_loss)
-        style_metric(style_loss)
-        total_metric(total_loss)
+parser.add_argument('-e', '--epochs', type=int,
+                    default=NUM_EPOCHS,
+                    help='Number of training epochs')
+parser.add_argument('-bs', '--batch_size', type=int,
+                    default=BATCH_SIZE,
+                    help='Batch size for training')
+parser.add_argument('-nw' ,'--num_workers', type=int,
+                    default=NUM_WORKERS,
+                    help='Number of workers for data loading')
 
-    return content_metric.compute(), style_metric.compute(), total_metric.compute()
+parser.add_argument('-td', '--train_dir', type=str,
+                    default=TRAIN_DIR,
+                    help='Path to the color model train image folder')
+parser.add_argument('-vd', '--val_dir', type=str,
+                    default=VAL_DIR,
+                    help='Path to the color model validation image folder')
 
-def val_style(model, loss_func, loader, device, args):
+parser.add_argument('-op', '--optimizer', type=str,
+                    default=OPTIMIZER,
+                    help='Optimizer for training',
+                    choices=["sgd", "adam"])
+parser.add_argument('-lr', '--learning_rate', type=float,
+                    default=LEARNING_RATE,
+                    help='Learning rate for the optimizer')
+parser.add_argument('--momentum', type=float,
+                    default=MOMENTUM,
+                    help='Momentum for SGD optimizer')
 
-    model.eval()
+parser.add_argument('-id', '--resume_id', type=str,
+                    default=RESUME_ID,
+                    help='Wandb run ID to resume training')
+parser.add_argument('-cf', '--checkpoint_freq', type=int,
+                    default=CHECKPOINT_FREQ,
+                    help='Frequency of saving checkpoints during training, -1 for no checkpoints')
 
-    content_metric = torchmetrics.MeanMetric().to(device)
-    style_metric = torchmetrics.MeanMetric().to(device)
-    total_metric = torchmetrics.MeanMetric().to(device)
+parser.add_argument('--enable_dali', action='store_true',
+                    help='Enable DALI for faster data loading')
+parser.add_argument('--enable_amp', action='store_true',
+                    help='Enable Mixed Precision for faster training and lower memory usage')
+
+parser.add_argument('-ampt', '--amp_dtype', type=str,
+                    default=AMP_TYPE,
+                    help='Set dtype for amp',
+                    choices=["bf16", "fp16"])
+
+args = parser.parse_args()
+
+print("Init dataloader")
+if args.enable_dali:
+    train_loader = DALIGenericIterator(
+        [dataset.StyleDataset.dali_pipeline(content_dir=args.train_dir,
+                                            batch_size=args.batch_size,
+                                            num_threads=args.num_workers,
+                                            prefetch_queue_depth=4 if args.enable_amp else 2)],
+        ['content'],
+        reader_name='Reader'
+    )
+
+    val_loader = DALIGenericIterator(
+        [dataset.StyleDataset.dali_pipeline(content_dir=args.val_dir,
+                                            batch_size=args.batch_size,
+                                            num_threads=args.num_workers,
+                                            prefetch_queue_depth=4 if args.enable_amp else 2)],
+        ['content'],
+        reader_name='Reader'
+    )
+else:
+    pass
     
-    if args.amp_dtype == "bf16":
-        dtype = torch.bfloat16
-    else:
-        dtype = torch.float16
+model = model.StyleTransfer()
+loss = mp.StyleLoss()
 
-    for _, data in enumerate(loader):
-        content = data[0]['content']
+if args.optimizer == "sgd":
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=args.momentum)
+else:
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
-        with torch.no_grad(), torch.autocast(device_type="cuda", dtype=dtype, enabled=args.enable_amp):
-            content_out, content_features, content_features_loss = model(content)
-            content_loss, style_loss = loss_func(content, content_out, content_features, content_features_loss)
-            total_loss = content_loss + style_loss
-
-        content_metric(content_loss)
-        style_metric(style_loss)
-        total_metric(total_loss)
-
-    return content_metric.compute(), style_metric.compute(), total_metric.compute()
-
-def train_model(model, optimizer, loss, train_loader, val_loader, args):
-                
-    device = torch.device("cpu")
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-        torch.cuda.set_device(device)
-
-    checkpoint_count = 0
-    init_epoch = 0
-    loss.to(device)
-    project_name = "StyleTransfer"
-    scaler = torch.cuda.amp.GradScaler(enabled=args.enable_amp)
-
-    config = {
-    "model": model.__class__.__name__,
-    "optimizer": optimizer.__class__.__name__,
-    "loss": loss.__class__.__name__,
-    "learning_rate": optimizer.param_groups[0]['lr'],
-    "momentum": None if isinstance(optimizer, torch.optim.Adam) else optimizer.param_groups[0]['momentum'],
-    }
-
-    if args.resume_id is not None:
-        model_, optimizer_, scaler_, epoch_ = utils.load_train_state("model/train.state")
-
-        model.load_state_dict(model_)
-        cmodel = torch.compile(model, mode="reduce-overhead")
-        cmodel.to(device)
-
-        optimizer.load_state_dict(optimizer_)
-        scaler.load_state_dict(scaler_)
-
-        init_epoch = epoch_ + 1 # PLus 1 means start at the next epoch
-        run = wandb.init(project=project_name, config=config, id=args.resume_id, resume=True)
-    else:
-        cmodel = torch.compile(model, mode="reduce-overhead")
-        cmodel.to(device)
-        run = wandb.init(project=project_name, config=config)
-
-    for epoch in tq.tqdm(range(init_epoch, args.epochs), total=args.epochs, desc='Epochs', initial=init_epoch):
-        train_loss = train_style(cmodel, optimizer, scaler, loss, train_loader, device, args)
-        val_loss = val_style(cmodel, loss, val_loader, device, args)
-        wandb.log({"content_loss": train_loss[0], 
-                    "style_loss": train_loss[1], 
-                    "total_loss": train_loss[2], 
-                    "content_loss_val": val_loss[0], 
-                    "style_loss_val": val_loss[1], 
-                    "total_loss_val": val_loss[2], 
-                    "epoch": epoch})
-        
-        checkpoint_count = checkpoint_count + 1 
-        if checkpoint_count == args.checkpoint_freq:
-            utils.save_train_state(model, optimizer, scaler, epoch, "model/train.state")
-            checkpoint_count = 0
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"Saved checkpoint at epoch: {epoch + 1} ({now})")
-
-    model_scripted = torch.jit.trace(model.cpu(), (torch.rand(1,3,256,256),torch.rand(1,3,256,256)))
-    model_scripted.save('model/model_style.pt')
-    run.finish()
+print("Training...")
+train.train_model(model, 
+                optimizer, 
+                loss, 
+                train_loader, 
+                val_loader, 
+                args)
