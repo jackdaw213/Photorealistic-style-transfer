@@ -16,15 +16,17 @@ parser.add_argument('-c', '--content', type=str,
 parser.add_argument('-s', '--style', type=str,
                     help='Path to the style image')
 parser.add_argument('-m', '--model', type=str,
+                    default="model/photo.pt",
                     help='Path to the model')
 
 args = parser.parse_args()
 
-model = torch.jit.load('model/model.pt')
+model = torch.jit.load(args.model)
 model.eval()
 
 content = F.to_tensor(Image.open(args.content).convert("RGB"))
 style = F.to_tensor(Image.open(args.style).convert("RGB"))
+
 content = content.unsqueeze(dim=0).float()
 style = style.unsqueeze(dim=0).float()
 
@@ -32,6 +34,13 @@ with torch.no_grad():
     output = model(content, style)
 
 output = output.squeeze()
+output = torch.clip(output, min=0, max=1) # To avoid artifacts
+F.to_pil_image(output).save("output.jpg")
 
-plt.imshow(output.permute(1, 2, 0))
+image = utils.paste_concat_images(content.squeeze(), 
+                                  style.squeeze(), 
+                                  output)
+image.save("comp.jpg")
+
+plt.imshow(image)
 plt.show()
