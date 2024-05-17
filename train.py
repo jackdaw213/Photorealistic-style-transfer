@@ -13,8 +13,8 @@ NUM_EPOCHS = 10
 BATCH_SIZE = 16
 NUM_WORKERS = 4
 
-TRAIN_DIR = "data/train_content"
-VAL_DIR = "data/val_content"
+TRAIN_DIR = "data/train"
+VAL_DIR = "data/val"
 
 OPTIMIZER = "adam"
 LEARNING_RATE = 0.00005
