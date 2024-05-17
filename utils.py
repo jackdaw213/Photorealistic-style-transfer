@@ -101,13 +101,15 @@ def test_style_model(model, con_images_path, sty_images_path, num_samples=8):
 
     image_grid(Content=con_images, Style=sty_images, Output=output)            
 
-def save_train_state(model, optimizer, scaler, epoch, path):
+def save_train_state(model, optimizer, scaler, epoch, path, train_list=None, val_list=None):
     # This one is for resuming training
     torch.save({
     'model': model.state_dict(),
     'optimizer': optimizer.state_dict(),
     'scaler': scaler.state_dict(),
-    'epoch': epoch
+    'epoch': epoch,
+    'train_list': train_list,
+    'val_list': val_list,
     }, path)
 
     path = path + ".epoch" + str(epoch + 1)
@@ -115,16 +117,25 @@ def save_train_state(model, optimizer, scaler, epoch, path):
     'model': model.state_dict(),
     'optimizer': optimizer.state_dict(),
     'scaler': scaler.state_dict(),
-    'epoch': epoch
+    'epoch': epoch,
+    'train_list': train_list,
+    'val_list': val_list,
     }, path)
 
 def load_train_state(path):
     try:
         state = torch.load(path)
-        return state["model"], state["optimizer"], state["scaler"], state["epoch"]
+        return state["model"], state["optimizer"], state["scaler"], state["epoch"], state["train_lost"], state["val_lost"]
     except Exception as e:
         print(e)
         sys.exit("Loading train state failed, existing")
+
+def plot_loss_history(state_file):
+    state = torch.load(state_file)
+    plt.plot(state["train_list"], label='train_loss')
+    plt.plot(state["val_list"],label='val_loss')
+    plt.legend()
+    plt.show()
 
 def pad_fetures(up, con_channels):
     """
