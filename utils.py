@@ -47,6 +47,27 @@ def image_grid(**kwargs):
     plt.tight_layout()
     plt.show()
 
+def paste_concat_images(input1, input2, output):
+    input1 = F.to_pil_image(input1)
+    input2 = F.to_pil_image(input2)
+    output = F.to_pil_image(output)
+    
+    wo, ho = output.size
+    h2 = int(ho * 0.25)
+    aspect_ratio = input2.width / input2.height
+    w2 = int(h2 * aspect_ratio)
+    
+    input2 = input2.resize((w2, h2))
+    
+    # Bottom left corner
+    output.paste(input2, (0, ho - h2))
+    
+    new = Image.new('RGB', (input1.width + output.width, input1.height))
+    new.paste(input1, (0, 0))
+    new.paste(output, (input1.width, 0))
+    
+    return new
+
 def test_style_model(model, con_images_path, sty_images_path, num_samples=8):
     cons = os.listdir(con_images_path)
     cons = np.random.choice(cons, num_samples, replace=False)
