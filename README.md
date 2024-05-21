@@ -81,11 +81,11 @@ This should prepare the Conda environment for both training and testing (pretrai
 
 ## Result
 
-![image](https://github.com/jackdaw213/Photorealistic-style-transfer/tree/master/results/comp1.jpg)
-![image](https://github.com/jackdaw213/Photorealistic-style-transfer/tree/master/results/comp2.jpg)
-![image](https://github.com/jackdaw213/Photorealistic-style-transfer/tree/master/results/comp3.jpg)
-![image](https://github.com/jackdaw213/Photorealistic-style-transfer/tree/master/results/comp4.jpg)
-![image](https://github.com/jackdaw213/Photorealistic-style-transfer/tree/master/results/comp5.jpg)
+![image](https://github.com/jackdaw213/Photorealistic-style-transfer/blob/master/results/comp1.jpg)
+![image](https://github.com/jackdaw213/Photorealistic-style-transfer/blob/master/results/comp2.jpg)
+![image](https://github.com/jackdaw213/Photorealistic-style-transfer/blob/master/results/comp3.jpg)
+![image](https://github.com/jackdaw213/Photorealistic-style-transfer/blob/master/results/comp4.jpg)
+![image](https://github.com/jackdaw213/Photorealistic-style-transfer/blob/master/results/comp5.jpg)
 
 ## References
 
