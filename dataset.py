@@ -1,15 +1,13 @@
 import torch
 import os
 import torchvision.transforms as transforms
-from cucim.skimage.color import rgb2lab
 from PIL import Image
-import torch.nn.functional as F
 
 import nvidia.dali.types as types
 from nvidia.dali.pipeline import pipeline_def
 import nvidia.dali.fn as fn
 
-import utils
+import exinput
 
 class StyleDataset(torch.utils.data.Dataset):
     def __init__(self, content_dir):
@@ -34,12 +32,13 @@ class StyleDataset(torch.utils.data.Dataset):
         return content
     
     @staticmethod
-    @pipeline_def(device_id=0)
-    def dali_pipeline(content_dir):
-        content_images, _ = fn.readers.file(file_root=content_dir, 
-                                            files=utils.list_images(content_dir),
-                                            random_shuffle=True, 
-                                            name="Reader")
+    @pipeline_def(device_id=0, py_start_method="spawn")
+    def dali_pipeline(content_dir, bs):
+        content_images = fn.external_source(
+            source=exinput.ExternalInputCallable(content_dir, bs), 
+            parallel=True, 
+            batch=False
+        )
         
         content_images = fn.decoders.image(content_images, device="mixed", output_type=types.RGB)
 
